@@ -1,1 +1,4 @@
-this-package-does-not-exist
+streamlit
+pandas
+numpy
+scikit-learn
