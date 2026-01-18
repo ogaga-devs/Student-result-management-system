@@ -10,10 +10,10 @@ from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
 
-st.set_page_config(page_title="Student Risk Prediction", layout="wide")
+st.set_page_config(page_title="Student Result Management System", layout="wide")
 
 # LOAD DATA
-st.title("🎓 Student Risk Prediction System")
+st.title("🎓 Student Result Management System")
 
 @st.cache_data
 def load_data():
@@ -78,7 +78,7 @@ for col in categorical_cols:
     srms[col] = le.fit_transform(srms[col])
 
 # CORRELATION HEATMAP
-st.subheader("Feature Correlation")
+st.subheader("Correlation Map")
 fig, ax = plt.subplots(figsize=(10, 6))
 sns.heatmap(srms.corr(), annot=False, cmap='coolwarm', ax=ax)
 st.pyplot(fig)
@@ -228,3 +228,4 @@ if st.sidebar.button("Predict Risk"):
         "Probability": [probabilities[0], probabilities[1]]
     })
     st.table(prob_df)
+
