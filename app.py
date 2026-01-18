@@ -141,7 +141,6 @@ st.pyplot(fig)
 
 
 # SIDEBAR INPUT (WITH GRADE)
-# ===============================
 st.sidebar.header("🔮 Student Information")
 
 Math_score = st.sidebar.slider("Math Score", 0, 100, 70)
@@ -157,7 +156,6 @@ Final_grade = st.sidebar.selectbox(
 )
 
 # PREDICTION
-# ===============================
 st.subheader("📌 Prediction Result")
 
 if st.sidebar.button("Predict Risk"):
@@ -194,7 +192,6 @@ if st.sidebar.button("Predict Risk"):
         )
 
         # WHY STUDENT IS AT RISK
-        # ===============================
         st.markdown("### 📌 Key Risk Indicators")
 
         if Math_score < 50:
@@ -228,4 +225,5 @@ if st.sidebar.button("Predict Risk"):
         "Probability": [probabilities[0], probabilities[1]]
     })
     st.table(prob_df)
+
 
