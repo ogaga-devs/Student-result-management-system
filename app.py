@@ -10,10 +10,10 @@ from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
 
-st.set_page_config(page_title="Student Result Management System", layout="wide")
+st.set_page_config(page_title="Students Result Management System", layout="wide")
 
 # LOAD DATA
-st.title("🎓 Student Result Management System")
+st.title("🎓 Students Result Management System")
 
 @st.cache_data
 def load_data():
@@ -21,40 +21,35 @@ def load_data():
 
 srms = load_data()
 
+# Create Student ID if not exists
+if 'Student_ID' not in srms.columns:
+    srms['Student_ID'] = (srms.index + 1).astype(str)
+
+# PREVIEW DATA
 st.subheader("Dataset Preview")
 st.dataframe(srms.head())
 
-# MISSING VALUES HEATMAP
+# MISSING VALUES
 st.subheader("Missing Values Heatmap")
 fig, ax = plt.subplots()
 sns.heatmap(srms.isnull(), cbar=False, ax=ax)
 st.pyplot(fig)
 
-# DESCRIPTIVE STATISTICAL SUMMARY
-st.subheader("📊 Descriptive Statistics of the Dataset")
+# DESCRIPTIVE STATISTICS
+st.subheader("📊 Descriptive Statistics")
+st.dataframe(srms.describe().T)
 
-# Generate summary
-desc_summary = srms.describe().T  # Transpose for better readability
-
-# Display in Streamlit
-st.dataframe(desc_summary)
-
-# GRADE → RISK RULE (REQUIRED)
+# GRADE → RISK RULE
 def grade_based_risk(grade):
-    if grade in ['A', 'B', 'C']:
-        return 1   # Not At Risk
-    else:
-        return 0   # At Risk
+    return 1 if grade in ['A', 'B', 'C'] else 0  # 1=Not At Risk, 0=At Risk
 
-# RISK LABELING
-# 0 = At Risk | 1 = Not At Risk
-def risk_label(grade):
-    if grade in ['A', 'B', 'C']:
-        return 1
-    else:
-        return 0
+# Preserve grade for display
+srms['Student_Grade'] = srms['Final_grade']
 
-srms['Risk'] = srms['Final_grade'].apply(risk_label)
+# Create Risk label
+srms['Risk'] = srms['Final_grade'].apply(grade_based_risk)
+
+# Drop original grade for modeling
 srms.drop(columns=['Final_grade'], inplace=True)
 
 # EDA
@@ -72,15 +67,17 @@ st.pyplot(fig)
 
 # ENCODING
 categorical_cols = srms.select_dtypes(include='object').columns
+categorical_cols = categorical_cols.drop(['Student_ID', 'Student_Grade'], errors='ignore')
 
 for col in categorical_cols:
     le = LabelEncoder()
     srms[col] = le.fit_transform(srms[col])
 
-# CORRELATION HEATMAP
-st.subheader("Correlation Map")
+# CORRELATION
+st.subheader("Correlation Matrix")
+numeric_cols = srms.select_dtypes(include=np.number)  # only numeric
 fig, ax = plt.subplots(figsize=(10, 6))
-sns.heatmap(srms.corr(), annot=False, cmap='coolwarm', ax=ax)
+sns.heatmap(numeric_cols.corr(), annot=True, cmap='coolwarm', ax=ax)
 st.pyplot(fig)
 
 # MODEL TRAINING
@@ -114,13 +111,8 @@ st.write("Accuracy:", accuracy_score(y_test, y_pred))
 st.write("Confusion Matrix")
 st.write(confusion_matrix(y_test, y_pred))
 
-report = classification_report(
-    y_test, y_pred,
-    target_names=["At Risk (0)", "Not At Risk (1)"]
-)
-
 st.subheader("Classification Report")
-st.code(report)
+st.code(classification_report(y_test, y_pred))
 
 # FEATURE IMPORTANCE
 st.subheader("📊 Feature Importance")
@@ -131,100 +123,75 @@ importance_df = pd.DataFrame({
 }).sort_values(by="Importance")
 
 fig, ax = plt.subplots()
-sns.barplot(
-    x="Importance",
-    y="Feature",
-    data=importance_df,
-    ax=ax
-)
+sns.barplot(x="Importance", y="Feature", data=importance_df, ax=ax)
 st.pyplot(fig)
 
+# SIDEBAR INPUTS
+st.sidebar.header("🔮 Manual Prediction")
 
-# SIDEBAR INPUT (WITH GRADE)
-st.sidebar.header("🔮 Student Information")
+Math_score = st.sidebar.slider("Math Score", 0, 100, int(srms['Math_score'].mean()))
+Science_score = st.sidebar.slider("Science Score", 0, 100, int(srms['Science_score'].mean()))
+English_score = st.sidebar.slider("English Score", 0, 100, int(srms['English_score'].mean()))
+Overall_score = st.sidebar.slider("Overall Score", 0, 100, int(srms['Overall_score'].mean()))
+Extra_activities = st.sidebar.slider("Extra Activities", 0, 5, int(srms['Extra_activities'].mean()))
+Study_method = st.sidebar.slider("Study Method", 0, 5, int(srms['Study_method'].mean()))
 
-Math_score = st.sidebar.slider("Math Score", 0, 100, 70)
-Science_score = st.sidebar.slider("Science Score", 0, 100, 70)
-English_score = st.sidebar.slider("English Score", 0, 100, 70)
-Overall_score = st.sidebar.slider("Overall Score", 0, 100, 70)
-Extra_activities = st.sidebar.slider("Extra Activities", 0, 5, 2)
-Study_method = st.sidebar.slider("Study Method", 0, 5, 2)
+# STUDENT ID CHECK
+st.sidebar.header("🔎 Check Student by ID")
+student_id_input = st.sidebar.text_input("Enter Student ID")
 
-Final_grade = st.sidebar.selectbox(
-    "Final Grade",
-    ['A', 'B', 'C', 'D', 'E', 'F']
-)
+# STUDENT ID PREDICTION
+if student_id_input:
+    if student_id_input in srms['Student_ID'].values:
+        student = srms[srms['Student_ID'] == student_id_input].iloc[0]
 
-# PREDICTION
-st.subheader("📌 Prediction Result")
+        # Predict probabilities
+        input_scaled = scaler.transform(student[features].values.reshape(1, -1))
+        probabilities = model.predict_proba(input_scaled)[0]
 
-if st.sidebar.button("Predict Risk"):
+        final_risk = np.argmax(probabilities)
+        risk_status = "Not At Risk ✅" if final_risk == 1 else "At Risk ⚠️"
 
-    # Prepare model input
-    input_df = pd.DataFrame([[
-        Math_score,
-        Science_score,
-        English_score,
-        Overall_score,
-        Extra_activities,
-        Study_method
-    ]], columns=features)
+        # Display student info
+        st.subheader(f"Student ID: {student_id_input}")
+        st.markdown(f"**Final Grade:** {student['Student_Grade']}")
+        st.markdown(f"**Risk Status:** {risk_status}")
+        st.markdown(f"**Model Confidence:** {probabilities[final_risk]:.2f}")
 
-    input_scaled = scaler.transform(input_df)
-    probability = model.predict_proba(input_scaled)
+        # ✅ Display subject scores / numeric features
+        st.markdown("### 📊 Student Scores & Features")
+        st.dataframe(student[features].to_frame().T)
 
-    # Grade-based final decision
-    final_risk = grade_based_risk(Final_grade)
-    confidence = probability[0][final_risk]
-
-    if final_risk == 1:
-        st.success(
-            f"✅ **Not At Risk**\n\n"
-            f"Grade Entered: {Final_grade}\n\n"
-            f"Model Confidence: {confidence:.2f}"
-        )
+        # Display prediction probabilities
+        st.markdown("### 📌 Risk Probabilities")
+        st.table(pd.DataFrame({
+            "Risk Status": ["At Risk", "Not At Risk"],
+            "Probability": probabilities
+        }))
 
     else:
-        st.error(
-            f"⚠️ **At Risk**\n\n"
-            f"Grade Entered: {Final_grade}\n\n"
-            f"Model Confidence: {confidence:.2f}"
-        )
+        st.error("❌ Student ID not found")
 
-        # WHY STUDENT IS AT RISK
-        st.markdown("### 📌 Key Risk Indicators")
+# MANUAL PREDICTION
+elif st.sidebar.button("Predict Risk"):
+    input_df = pd.DataFrame([[Math_score, Science_score, English_score,
+                              Overall_score, Extra_activities, Study_method]],
+                            columns=features)
 
-        if Math_score < 50:
-            st.write("- Low performance in Mathematics")
+    input_scaled = scaler.transform(input_df)
+    probabilities = model.predict_proba(input_scaled)[0]
 
-        if English_score < 50:
-            st.write("- Weak English language score")
+    pred_risk = np.argmax(probabilities)
+    risk_status = "Not At Risk ✅" if pred_risk == 1 else "At Risk ⚠️"
 
-        if Overall_score < 55:
-            st.write("- Poor overall academic performance")
+    st.subheader("📊 Manual Prediction Result")
+    st.markdown(f"**Risk Status:** {risk_status}")
+    st.markdown(f"**Model Confidence:** {probabilities[pred_risk]:.2f}")
 
-        if Extra_activities < 1:
-            st.write("- Limited participation in extracurricular activities")
-
-    # Prepare model input
-    input_df = pd.DataFrame([[
-        Math_score,
-        Science_score,
-        English_score,
-        Overall_score,
-        Extra_activities,
-        Study_method
-    ]], columns=features)
-
-    # Get prediction probabilities
-    probabilities = model.predict_proba(input_scaled)[0]  # [At Risk, Not At Risk]
-
-    # Display probabilities
-    prob_df = pd.DataFrame({
+    st.table(pd.DataFrame({
         "Risk Status": ["At Risk", "Not At Risk"],
-        "Probability": [probabilities[0], probabilities[1]]
-    })
-    st.table(prob_df)
+        "Probability": probabilities
+    }))
 
 
 
